@@ -24,9 +24,9 @@ namespace FractureCharacters
     /// </summary>
     public class AutoUpdater
     {
-        // GitHub repository info - UPDATE THESE FOR YOUR REPO
-        private const string GITHUB_OWNER = "YourGitHubUsername";  // TODO: Update this
-        private const string GITHUB_REPO = "Valheim";              // TODO: Update this
+        // GitHub repository info
+        private const string GITHUB_OWNER = "Dreadarm";
+        private const string GITHUB_REPO = "FractureCharacters";
         private const string GITHUB_API_BASE = "https://api.github.com";
         private const string GITHUB_RELEASES_LATEST = "/repos/{0}/{1}/releases/latest";
         
