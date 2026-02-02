@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>FractureCharacters</AssemblyName>
+    <RootNamespace>FractureCharacters</RootNamespace>
+    <Version>1.0.0</Version>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <!-- 
+      System.Net.Http version conflict:
+      - netstandard2.1 ships with System.Net.Http 4.1.2.0
+      - Unity 6 (Valheim 0.221.10) ships with System.Net.Http 4.2.0.0
+      - At runtime, Unity provides the 4.2.0.0 version which is backwards compatible
+    -->
+    <NoWarn>$(NoWarn);MSB3277</NoWarn>
+    <!-- Default paths - can be overridden with environment variable -->
+    <ValheimInstall Condition="'$(VALHEIM_INSTALL)' != ''">$(VALHEIM_INSTALL)</ValheimInstall>
+    <ValheimInstall Condition="'$(VALHEIM_INSTALL)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Valheim</ValheimInstall>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- NuGet Packages -->
+    <PackageReference Include="HarmonyX" Version="2.10.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Game References -->
+    <Reference Include="assembly_valheim_publicized">
+      <HintPath>$(ValheimInstall)\valheim_Data\Managed\publicized_assemblies\assembly_valheim_publicized.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="assembly_utils_publicized">
+      <HintPath>$(ValheimInstall)\valheim_Data\Managed\publicized_assemblies\assembly_utils_publicized.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    
+    <!-- BepInEx -->
+    <Reference Include="BepInEx">
+      <HintPath>$(ValheimInstall)\BepInEx\core\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    
+    <!-- Unity -->
+    <Reference Include="UnityEngine">
+      <HintPath>$(ValheimInstall)\valheim_Data\Managed\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(ValheimInstall)\valheim_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

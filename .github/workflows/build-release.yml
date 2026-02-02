@@ -1,0 +1,154 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  PROJECT_NAME: FractureCharacters
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Restore dependencies
+      run: dotnet restore
+      working-directory: ./FractureCharacters
+
+    - name: Build Release
+      run: dotnet build -c Release --no-restore
+      working-directory: ./FractureCharacters
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.PROJECT_NAME }}-build
+        path: |
+          FractureCharacters/bin/Release/FractureCharacters.dll
+          FractureCharacters/README.md
+        retention-days: 30
+
+  release:
+    needs: build
+    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ env.PROJECT_NAME }}-build
+        path: ./artifacts
+
+    - name: Extract version from tag
+      id: get_version
+      shell: pwsh
+      run: |
+        $version = "${{ github.ref_name }}".TrimStart('v')
+        echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        echo "Extracted version: $version"
+
+    - name: Create release package
+      shell: pwsh
+      run: |
+        # Create release folder structure
+        New-Item -ItemType Directory -Force -Path "./release/BepInEx/plugins"
+        
+        # Copy files
+        Copy-Item "./artifacts/FractureCharacters/bin/Release/FractureCharacters.dll" "./release/BepInEx/plugins/"
+        Copy-Item "./artifacts/FractureCharacters/README.md" "./release/"
+        
+        # Create version.json for auto-updater
+        $versionInfo = @{
+          version = "${{ steps.get_version.outputs.VERSION }}"
+          download_url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/FractureCharacters-${{ steps.get_version.outputs.VERSION }}.zip"
+          release_url = "https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+          published_at = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+        } | ConvertTo-Json
+        $versionInfo | Out-File -FilePath "./release/version.json" -Encoding utf8
+        
+        # Create zip
+        Compress-Archive -Path "./release/*" -DestinationPath "./FractureCharacters-${{ steps.get_version.outputs.VERSION }}.zip"
+        
+        # Also create a standalone DLL zip for quick updates
+        Compress-Archive -Path "./artifacts/FractureCharacters/bin/Release/FractureCharacters.dll" -DestinationPath "./FractureCharacters-${{ steps.get_version.outputs.VERSION }}-dll-only.zip"
+
+    - name: Generate release notes
+      id: release_notes
+      shell: pwsh
+      run: |
+        $notes = @"
+        ## FractureCharacters v${{ steps.get_version.outputs.VERSION }}
+        
+        ### Installation
+        1. Extract the zip to your Valheim server folder
+        2. The \`BepInEx/plugins/FractureCharacters.dll\` will be in the correct location
+        
+        ### Quick Update (existing installations)
+        Download \`FractureCharacters-${{ steps.get_version.outputs.VERSION }}-dll-only.zip\` and extract to \`BepInEx/plugins/\`
+        
+        ### Auto-Update
+        If you have auto-update enabled, the mod will update itself on next server restart.
+        
+        ---
+        See [README.md](https://github.com/${{ github.repository }}/blob/main/FractureCharacters/README.md) for full documentation.
+        "@
+        
+        # Write to file for the release action
+        $notes | Out-File -FilePath "./RELEASE_NOTES.md" -Encoding utf8
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: FractureCharacters v${{ steps.get_version.outputs.VERSION }}
+        body_path: ./RELEASE_NOTES.md
+        draft: false
+        prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+        files: |
+          ./FractureCharacters-${{ steps.get_version.outputs.VERSION }}.zip
+          ./FractureCharacters-${{ steps.get_version.outputs.VERSION }}-dll-only.zip
+          ./release/version.json
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Update latest version file
+      shell: pwsh
+      run: |
+        # Create/update a latest.json in the repo for the auto-updater to check
+        $latest = @{
+          version = "${{ steps.get_version.outputs.VERSION }}"
+          tag = "${{ github.ref_name }}"
+          download_url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/FractureCharacters-${{ steps.get_version.outputs.VERSION }}-dll-only.zip"
+          full_package_url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/FractureCharacters-${{ steps.get_version.outputs.VERSION }}.zip"
+          release_url = "https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+          published_at = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+        } | ConvertTo-Json -Depth 3
+        
+        echo "Latest version info:"
+        echo $latest
