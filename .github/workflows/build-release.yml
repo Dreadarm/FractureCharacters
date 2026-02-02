@@ -40,13 +40,18 @@ jobs:
     - name: Build Release
       run: dotnet build -c Release --no-restore
 
-    - name: Upload build artifacts
+    - name: Upload DLL artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ env.PROJECT_NAME }}-build
-        path: |
-          bin/Release/FractureCharacters.dll
-          README.md
+        name: ${{ env.PROJECT_NAME }}-dll
+        path: bin/Release/FractureCharacters.dll
+        retention-days: 30
+
+    - name: Upload README artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.PROJECT_NAME }}-readme
+        path: README.md
         retention-days: 30
 
   release:
@@ -58,11 +63,23 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Download build artifacts
+    - name: Download DLL artifact
       uses: actions/download-artifact@v4
       with:
-        name: ${{ env.PROJECT_NAME }}-build
+        name: ${{ env.PROJECT_NAME }}-dll
         path: ./artifacts
+
+    - name: Download README artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ env.PROJECT_NAME }}-readme
+        path: ./artifacts
+
+    - name: List artifacts
+      shell: pwsh
+      run: |
+        Write-Host "Artifacts downloaded:"
+        Get-ChildItem -Recurse ./artifacts
 
     - name: Extract version from tag
       id: get_version
@@ -78,8 +95,8 @@ jobs:
         # Create release folder structure
         New-Item -ItemType Directory -Force -Path "./release/BepInEx/plugins"
 
-        # Copy files
-        Copy-Item "./artifacts/bin/Release/FractureCharacters.dll" "./release/BepInEx/plugins/"
+        # Copy files (artifacts are flat in ./artifacts/)
+        Copy-Item "./artifacts/FractureCharacters.dll" "./release/BepInEx/plugins/"
         Copy-Item "./artifacts/README.md" "./release/"
 
         # Create version.json for auto-updater
@@ -95,7 +112,7 @@ jobs:
         Compress-Archive -Path "./release/*" -DestinationPath "./FractureCharacters-${{ steps.get_version.outputs.VERSION }}.zip"
 
         # Also create a standalone DLL zip for quick updates
-        Compress-Archive -Path "./artifacts/bin/Release/FractureCharacters.dll" -DestinationPath "./FractureCharacters-${{ steps.get_version.outputs.VERSION }}-dll-only.zip"
+        Compress-Archive -Path "./artifacts/FractureCharacters.dll" -DestinationPath "./FractureCharacters-${{ steps.get_version.outputs.VERSION }}-dll-only.zip"
 
     - name: Generate release notes
       id: release_notes
